@@ -20,7 +20,7 @@ Player::Player(uintptr_t new_id, const std::string& new_name, const std::string&
 	id = new_id;
 	name = new_name;
 	account_name = new_account_name;
-	enter_combat_time = getCurrentTime();
+	enter_combat_time = 0;
 	in_combat = false;
 	subgroup = new_subgroup;
 	profession = new_profession;
@@ -31,6 +31,8 @@ void Player::applyBoon(cbtevent* ev)
 	if (!ev) return;
 	if (ev->value == 0) return;
 //	if (ev->value <= ev->overstack_value) return;
+
+	startCombat(ev);
 
 	BoonDef* current_def = getTrackedBoon(ev->skillid);
 	if (!current_def) return;
@@ -49,6 +51,14 @@ void Player::applyBoon(cbtevent* ev)
 	{
 		current_boon_list->insert({ current_def->ids[0],Boon(current_def, getBuffApplyDuration(ev)) });
 	}
+}
+
+void Player::startCombat(cbtevent* ev) {
+	if (!ev) return;
+	if (ev->value == 0) return;
+	if(enter_combat_time == 0)
+		enter_combat_time = ev->time;
+
 }
 
 void Player::removeBoon(cbtevent* ev)
@@ -77,6 +87,8 @@ void Player::gaveBoon(cbtevent * ev)
 	if (!ev) return;
 	if (ev->value == 0) return;
 	if (ev->is_offcycle) return;//don't track boon extensions until they have a proper src
+
+	startCombat(ev);
 
 	BoonDef* current_def = getTrackedBoon(ev->skillid);
 	if (!current_def) return;
@@ -158,7 +170,7 @@ float Player::getBoonGeneration(const BoonDef& new_boon) const {
 void Player::combatEnter(cbtevent* ev)
 {
 	if (!ev) return;
-	enter_combat_time = ev->time;
+	enter_combat_time = 0;
 	in_combat = true;
 	subgroup = ev->dst_agent;
 	uint64_t duration_remaining = 0;

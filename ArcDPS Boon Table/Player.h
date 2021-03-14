@@ -43,6 +43,8 @@ public:
 	uint64_t getCombatDuration() const;
 
 	ImVec4 getProfessionColor() const;
+protected:
+	void Player::startCombat(cbtevent* ev);
 };
 
 extern std::mutex boons_mtx;
