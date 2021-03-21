@@ -100,6 +100,7 @@
       <Optimization>Disabled</Optimization>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions);IMGUI_DEFINE_MATH_OPERATORS</PreprocessorDefinitions>
     </ClCompile>
     <PostBuildEvent>
       <Command>powershell -noprofile -command  "(Get-FileHash '$(OutDirFullPath)$(TargetFileName)').Hash  &gt; '$(OutDirFullPath)$(TargetName).sha'"</Command>
@@ -126,6 +127,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions);IMGUI_DEFINE_MATH_OPERATORS</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -153,6 +155,8 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="NPC.cpp" />
     <ClCompile Include="Player.cpp" />
+    <ClCompile Include="Settings.cpp" />
+    <ClCompile Include="SettingsUI.cpp" />
     <ClCompile Include="simpleini\ConvertUTF.c" />
     <ClCompile Include="Tracker.cpp" />
   </ItemGroup>
@@ -163,6 +167,7 @@
     <ClInclude Include="Entity.h" />
     <ClInclude Include="extension\arcdps_structs.h" />
     <ClInclude Include="extension\Icon.h" />
+    <ClInclude Include="extension\map.h" />
     <ClInclude Include="extension\Widgets.h" />
     <ClInclude Include="Helpers.h" />
     <ClInclude Include="imgui\imconfig.h" />
@@ -175,9 +180,47 @@
     <ClInclude Include="NPC.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="Settings.h" />
+    <ClInclude Include="SettingsUI.h" />
     <ClInclude Include="simpleini\ConvertUTF.h" />
     <ClInclude Include="simpleini\SimpleIni.h" />
     <ClInclude Include="Tracker.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="ArcDPS Boon Table.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="icons\Aegis.png" />
+    <Image Include="icons\Alacrity.png" />
+    <Image Include="icons\Assassin%27s_Presence.png" />
+    <Image Include="icons\bannerStrength.png" />
+    <Image Include="icons\Banner_of_Defense2.png" />
+    <Image Include="icons\Banner_of_Discipline2.png" />
+    <Image Include="icons\Banner_of_Tactics2.png" />
+    <Image Include="icons\Empower_Allies.png" />
+    <Image Include="icons\Frost_Spirit2.png" />
+    <Image Include="icons\Fury.png" />
+    <Image Include="icons\Might.png" />
+    <Image Include="icons\Pinpoint_Distribution.png" />
+    <Image Include="icons\Protection.png" />
+    <Image Include="icons\Quickness.png" />
+    <Image Include="icons\Regeneration.png" />
+    <Image Include="icons\Resistance.png" />
+    <Image Include="icons\Retaliation.png" />
+    <Image Include="icons\Signet_of_Inspiration2.png" />
+    <Image Include="icons\Soothing_Mist.png" />
+    <Image Include="icons\Spotter.png" />
+    <Image Include="icons\Stability.png" />
+    <Image Include="icons\Stealth2.png" />
+    <Image Include="icons\Stone_Spirit2.png" />
+    <Image Include="icons\Storm_Spirit2.png" />
+    <Image Include="icons\Strength_in_Numbers.png" />
+    <Image Include="icons\Sun_Spirit2.png" />
+    <Image Include="icons\Super_Speed2.png" />
+    <Image Include="icons\Swiftness.png" />
+    <Image Include="icons\Vampiric_Presence.png" />
+    <Image Include="icons\Vigor.png" />
+    <Image Include="icons\Water_Spirit.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

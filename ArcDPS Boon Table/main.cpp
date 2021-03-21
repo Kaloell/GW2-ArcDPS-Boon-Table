@@ -6,22 +6,23 @@
 #include <Windows.h>
 #include <string>
 #include <regex>
+#include <d3d9.h>
 
-#include "imgui\imgui.h"
-#include "simpleini\SimpleIni.h"
-
+#include "imgui/imgui.h"
+#include "simpleini/SimpleIni.h"
 #include "extension/arcdps_structs.h"
 #include "Player.h"
 #include "Tracker.h"
 #include "AppChart.h"
 #include "Helpers.h"
+#include "Lang.h"
+#include "Settings.h"
+#include "SettingsUI.h"
 
 /* proto/globals */
 arcdps_exports arc_exports;
 char* arcvers;
-void dll_init(HANDLE hModule);
-void dll_exit();
-extern "C" __declspec(dllexport) void* get_init_addr(char* arcversionstr, void* imguicontext, void* id3dd9, HMODULE arcdll, void* mallocfn, void* freefn);
+extern "C" __declspec(dllexport) void* get_init_addr(char* arcversionstr, void* imguicontext, IDirect3DDevice9* id3dd9, HMODULE arcdll, void* mallocfn, void* freefn);
 extern "C" __declspec(dllexport) void* get_release_addr();
 arcdps_exports* mod_init();
 uintptr_t mod_release();
@@ -30,25 +31,25 @@ uintptr_t mod_combat(cbtevent* ev, ag* src, ag* dst, char* skillname, uint64_t i
 uintptr_t mod_imgui(uint32_t not_charsel_or_loading); /* id3dd9::present callback, before imgui::render, fn(uint32_t not_charsel_or_loading) */
 uintptr_t mod_options(); /* id3dd9::present callback, appending to the end of options window in arcdps, fn() */
 void readArcExports();
-void parseIni();
-void writeIni();
 bool modsPressed();
 bool canMoveWindows();
 
 Tracker tracker;
-
 AppChart chart;
-bool show_chart = false;
+SettingsUI settingsUi;
 
 typedef uint64_t(*arc_export_func_u64)();
 typedef void(*log_func)(char* str);
 
 HMODULE arc_dll;
+HMODULE self_dll;
 
 // get exports
 arc_color_func arc_export_e5;
 arc_export_func_u64 arc_export_e6;
 arc_export_func_u64 arc_export_e7;
+arc_log_func_ptr arc_log_file;
+arc_log_func_ptr arc_log;
 
 // arc globals
 WPARAM arc_global_mod1;
@@ -60,15 +61,11 @@ bool arc_movelock_altui = false;
 bool arc_clicklock_altui = false;
 bool arc_window_fastclose = false;
 
-CSimpleIniA table_ini(true);
-bool valid_table_ini = false;
-WPARAM table_key;
-
-
 /* dll main -- winapi */
-BOOL APIENTRY DllMain(HANDLE hModule, DWORD ulReasonForCall, LPVOID lpReserved) {
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ulReasonForCall, LPVOID lpReserved) {
 	switch (ulReasonForCall) {
 	case DLL_PROCESS_ATTACH:
+		self_dll = hModule;
 	case DLL_PROCESS_DETACH:
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
@@ -78,19 +75,21 @@ BOOL APIENTRY DllMain(HANDLE hModule, DWORD ulReasonForCall, LPVOID lpReserved) 
 }
 
 /* export -- arcdps looks for this exported function and calls the address it returns */
-extern "C" __declspec(dllexport) void* get_init_addr(char* arcversionstr, void* imguicontext, void* id3dd9, HMODULE new_arcdll, void* mallocfn, void* freefn) {
+extern "C" __declspec(dllexport) void* get_init_addr(char* arcversionstr, void* imguicontext, IDirect3DDevice9* id3dd9, HMODULE new_arcdll, void* mallocfn, void* freefn) {
 	// set all arcdps stuff
 	arcvers = arcversionstr;
 	arc_dll = new_arcdll;
 	arc_export_e5 = (arc_color_func)GetProcAddress(arc_dll, "e5");
 	arc_export_e6 = (arc_export_func_u64)GetProcAddress(arc_dll, "e6");
 	arc_export_e7 = (arc_export_func_u64)GetProcAddress(arc_dll, "e7");
+	arc_log_file = (arc_log_func_ptr)GetProcAddress(arc_dll, "e3");
+	arc_log = (arc_log_func_ptr)GetProcAddress(arc_dll, "e8");
 
 	// set imgui context && allocation for arcdps dll space
 	ImGui::SetCurrentContext(static_cast<ImGuiContext*>(imguicontext));
 	ImGui::SetAllocatorFunctions((void* (*)(size_t, void*))mallocfn, (void (*)(void*, void*))freefn);
 
-	parseIni();
+	init_tracked_buffs(id3dd9);
 	
 	return mod_init;
 }
@@ -121,7 +120,6 @@ arcdps_exports* mod_init()
 /* release mod -- return ignored */
 uintptr_t mod_release()
 {
-	writeIni();
 	return 0;
 }
 
@@ -183,7 +181,7 @@ uintptr_t mod_wnd(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	if (io->KeysDown[arc_global_mod1] && io->KeysDown[arc_global_mod2])
 	{
-		if (io->KeysDown[table_key]) return 0;
+		if (io->KeysDown[settings.getTableKey()]) return 0;
 	}
 	return uMsg;
 }
@@ -366,21 +364,28 @@ uintptr_t mod_imgui(uint32_t not_charsel_or_loading)
 
 	if (io->KeysDown[arc_global_mod1] && io->KeysDown[arc_global_mod2])
 	{
-		if (ImGui::IsKeyPressed(table_key))
+		if (ImGui::IsKeyPressed(settings.getTableKey()))
 		{
-			show_chart = !show_chart;
+			settings.show_chart = !settings.show_chart;
 		}
 	}
 
-	if (show_chart)
+	if (settings.show_chart)
 	{
-		chart.Draw(&show_chart, tracker, !canMoveWindows() ? ImGuiWindowFlags_NoMove : 0);
+		chart.Draw(&settings.show_chart, tracker, !canMoveWindows() ? ImGuiWindowFlags_NoMove : 0);
 	}
 	return 0;
 }
 uintptr_t mod_options()
 {
-	ImGui::Checkbox("Boon Table", &show_chart);
+	ImGui::Checkbox(lang.translate(LangKey::ShowChart).c_str(), &settings.show_chart);
+	ImGui::SameLine();
+	ImGui::BeginChild("boonTableSettings", ImVec2(0, ImGui::GetTextLineHeight()));
+	if (ImGui::BeginMenu("##boon-table-settings")) {
+		settingsUi.Draw();
+		ImGui::EndMenu();
+	}
+	ImGui::EndChild();
 	return 0;
 }
 
@@ -403,63 +408,6 @@ void readArcExports()
 		arc_global_mod2 = ra[1];
 		arc_global_mod_multi = ra[2];
 	}
-}
-
-void parseIni()
-{
-	SI_Error rc = table_ini.LoadFile("addons\\arcdps\\arcdps_table.ini");
-	valid_table_ini = rc >= 0;
-
-	std::string pszValueString = table_ini.GetValue("table", "show", "0");
-	show_chart = std::stoi(pszValueString);
-
-	pszValueString = table_ini.GetValue("table", "key", "66");
-	table_key = std::stoi(pszValueString);
-
-	pszValueString = table_ini.GetValue("table", "show_players", "1");
-	chart.setShowPlayers(std::stoi(pszValueString));
-
-	pszValueString = table_ini.GetValue("table", "show_subgroups", "1");
-	chart.setShowSubgroups(std::stoi(pszValueString));
-
-	pszValueString = table_ini.GetValue("table", "show_total", "1");
-	chart.setShowTotal(std::stoi(pszValueString));
-
-	pszValueString = table_ini.GetValue("table", "show_npcs", "1");
-	chart.setShowNPCs(std::stoi(pszValueString));
-
-	pszValueString = table_ini.GetValue("table", "show_uptime_as_progress_bar", "1");
-	chart.setShowBoonAsProgressBar(std::stoi(pszValueString));
-
-	pszValueString = table_ini.GetValue("table", "show_colored", "0");
-	long show_colored = table_ini.GetLongValue("table", "show_colored", static_cast<long>(ProgressBarColoringMode::Uncolored));
-	chart.setShowColored(static_cast<ProgressBarColoringMode>(show_colored));
-
-	bool size_to_content = table_ini.GetBoolValue("table", "size_to_content", true);
-	chart.setSizeToContent(size_to_content);
-
-	bool alternating_row_bg = table_ini.GetBoolValue("table", "alternating_row_bg", true);
-	chart.setAlternatingRowBg(alternating_row_bg);
-
-	long pszValueLong = table_ini.GetLongValue("table", "alignment", static_cast<long>(Alignment::Right));
-	chart.setAlignment(static_cast<Alignment>(pszValueLong));
-}
-
-void writeIni()
-{
-	SI_Error rc = table_ini.SetValue("table", "show", std::to_string(show_chart).c_str());
-
-	rc = table_ini.SetValue("table", "show_players", std::to_string(chart.bShowPlayers()).c_str());
-	rc = table_ini.SetValue("table", "show_subgroups", std::to_string(chart.getShowSubgroups()).c_str());
-	rc = table_ini.SetValue("table", "show_total", std::to_string(chart.bShowTotal()).c_str());
-	rc = table_ini.SetValue("table", "show_npcs", std::to_string(chart.bShowNPCs()).c_str());
-	rc = table_ini.SetValue("table", "show_uptime_as_progress_bar", std::to_string(chart.bShowBoonAsProgressBar()).c_str());
-	rc = table_ini.SetLongValue("table", "show_colored", static_cast<long>(chart.getShowColored()));
-	rc = table_ini.SetBoolValue("table", "size_to_content", chart.bSizeToContent());
-	rc = table_ini.SetBoolValue("table", "alternating_row_bg", chart.bAlternatingRowBg());
-	rc = table_ini.SetLongValue("table", "alignment", static_cast<long>(chart.getAlignment()));
-
-	rc = table_ini.SaveFile("addons\\arcdps\\arcdps_table.ini");
 }
 
 bool modsPressed()
